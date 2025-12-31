@@ -1,0 +1,539 @@
+-- ============================================
+-- 🎮 HEX MM2 SCRIPT
+-- Advanced Auto Farm + Auto Murder System
+-- GUI: Hex Interface
+-- ============================================
+
+getgenv().HexSecure = true
+
+-- Hex Library (Custom GUI)
+local HexLibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/RobloxianRoblox/Roblox/main/HexUI.lua"))()
+
+-- Hex Window
+local HexWindow = HexLibrary:CreateWindow({
+    Name = "🔮 HEX MM2",
+    Theme = "Dark",
+    Size = UDim2.new(0, 500, 0, 400),
+    Position = UDim2.new(0.5, -250, 0.5, -200)
+})
+
+-- Variables
+local Player = game:GetService("Players").LocalPlayer
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+-- Auto Farm Variables
+local AutoFarmEnabled = false
+local TargetCoins = 50
+local CollectedCoins = 0
+local FarmRange = 100
+local FarmSpeed = 0.3
+
+-- Auto Murder Variables
+local AutoMurderEnabled = false
+local MurderRange = 25
+local MurderCooldown = 1.5
+local KillList = {}
+local FailedKills = {}
+local TotalKills = 0
+
+-- Tabs
+local MainTab = HexWindow:CreateTab("🎯 Main")
+local FarmTab = HexWindow:CreateTab("🌾 Farm")
+local MurderTab = HexWindow:CreateTab("🔪 Murder")
+local StatsTab = HexWindow:CreateTab("📊 Stats")
+
+-- ============================
+-- 🎯 MAIN PANEL
+-- ============================
+
+MainTab:CreateSection("🎮 Controls")
+
+-- Main Toggle
+local MainToggle = MainTab:CreateToggle({
+    Text = "🚀 HEX System Active",
+    Callback = function(state)
+        if state then
+            HexWindow:Notify("HEX", "System started!", 3)
+            StartHexSystem()
+        else
+            HexWindow:Notify("HEX", "System stopped!", 3)
+            StopHexSystem()
+        end
+    end
+})
+
+-- Quick Start Buttons
+MainTab:CreateButton({
+    Text = "⚡ Quick Start Farm",
+    Callback = function()
+        AutoFarmEnabled = true
+        StartAutoFarm()
+        HexWindow:Notify("Farm", "Auto farm started!", 3)
+    end
+})
+
+MainTab:CreateButton({
+    Text = "⚡ Quick Start Murder",
+    Callback = function()
+        AutoMurderEnabled = true
+        StartAutoMurder()
+        HexWindow:Notify("Murder", "Auto murder started!", 3)
+    end
+})
+
+MainTab:CreateSection("⚙️ Settings")
+
+-- Theme Selector
+local ThemeDropdown = MainTab:CreateDropdown({
+    Text = "🎨 Theme",
+    Options = {"Dark", "Light", "Blue", "Red", "Purple"},
+    Callback = function(option)
+        HexWindow:SetTheme(option)
+        HexWindow:Notify("Theme", option .. " theme selected!", 2)
+    end
+})
+
+-- ============================
+-- 🌾 AUTO FARM SYSTEM
+-- ============================
+
+FarmTab:CreateSection("🌾 Coin Farm System")
+
+-- Auto Farm Toggle
+local FarmToggle = FarmTab:CreateToggle({
+    Text = "🟡 Auto Collect Coins",
+    Callback = function(state)
+        AutoFarmEnabled = state
+        if state then
+            StartAutoFarm()
+        end
+    end
+})
+
+-- Farm Settings
+FarmTab:CreateSlider({
+    Text = "📏 Farm Range: " .. FarmRange,
+    Min = 10,
+    Max = 300,
+    Callback = function(value)
+        FarmRange = value
+    end
+})
+
+FarmTab:CreateSlider({
+    Text = "⚡ Farm Speed: " .. FarmSpeed,
+    Min = 0.1,
+    Max = 1.0,
+    Callback = function(value)
+        FarmSpeed = value
+    end
+})
+
+-- Target Coins
+FarmTab:CreateSlider({
+    Text = "🎯 Target Coins: " .. TargetCoins,
+    Min = 10,
+    Max = 200,
+    Callback = function(value)
+        TargetCoins = value
+    end
+})
+
+-- Coin Type Selection
+FarmTab:CreateToggle({
+    Text = "💰 Collect Gold Coins",
+    Default = true,
+    Callback = function(state)
+        getgenv().CollectGold = state
+    end
+})
+
+FarmTab:CreateToggle({
+    Text = "🪙 Collect Normal Coins",
+    Default = true,
+    Callback = function(state)
+        getgenv().CollectNormal = state
+    end
+})
+
+-- ============================
+-- 🔪 AUTO MURDER SYSTEM
+-- ============================
+
+MurderTab:CreateSection("🔪 Auto Murder System")
+
+-- Auto Murder Toggle
+local MurderToggle = MurderTab:CreateToggle({
+    Text = "🔪 Auto Murder",
+    Callback = function(state)
+        AutoMurderEnabled = state
+        if state then
+            StartAutoMurder()
+        end
+    end
+})
+
+-- Murder Settings
+MurderTab:CreateSlider({
+    Text = "📏 Murder Range: " .. MurderRange,
+    Min = 5,
+    Max = 50,
+    Callback = function(value)
+        MurderRange = value
+    end
+})
+
+MurderTab:CreateSlider({
+    Text = "⏱️ Attack Cooldown: " .. MurderCooldown,
+    Min = 0.5,
+    Max = 5.0,
+    Callback = function(value)
+        MurderCooldown = value
+    end
+})
+
+-- Murder Options
+MurderTab:CreateToggle({
+    Text = "🌀 Teleport to Target",
+    Callback = function(state)
+        getgenv().TeleportToTarget = state
+    end
+})
+
+MurderTab:CreateToggle({
+    Text = "🔄 Retry Failed Kills",
+    Default = true,
+    Callback = function(state)
+        getgenv().RetryFailed = state
+    end
+})
+
+-- ============================
+-- 📊 STATISTICS PANEL
+-- ============================
+
+StatsTab:CreateSection("📈 Live Statistics")
+
+local CoinsLabel = StatsTab:CreateLabel("💰 Coins Collected: 0")
+local KillsLabel = StatsTab:CreateLabel("🔪 Players Killed: 0")
+local FailedLabel = StatsTab:CreateLabel("❌ Failed Attempts: 0")
+local StatusLabel = StatsTab:CreateLabel("📊 Status: Idle")
+
+StatsTab:CreateSection("⚙️ System Info")
+
+local ModeLabel = StatsTab:CreateLabel("🎯 Mode: Farm")
+local TimeLabel = StatsTab:CreateLabel("⏰ Runtime: 0s")
+local PlayersLabel = StatsTab:CreateLabel("👥 Players Left: 0")
+
+-- Reset Button
+StatsTab:CreateButton({
+    Text = "🔄 Reset Statistics",
+    Callback = function()
+        CollectedCoins = 0
+        TotalKills = 0
+        FailedKills = {}
+        KillList = {}
+        
+        CoinsLabel:SetText("💰 Coins Collected: 0")
+        KillsLabel:SetText("🔪 Players Killed: 0")
+        FailedLabel:SetText("❌ Failed Attempts: 0")
+        StatusLabel:SetText("📊 Status: Idle")
+        
+        HexWindow:Notify("Reset", "Statistics reset!", 2)
+    end
+})
+
+-- ============================
+-- 🧠 AUTO FARM FUNCTIONS
+-- ============================
+
+-- Check if player is murderer
+local function IsMurderer()
+    local char = Player.Character
+    if not char then return false end
+    
+    for _, child in pairs(char:GetChildren()) do
+        if child.Name == "Knife" or child.Name:find("Knife") then
+            return true
+        end
+    end
+    
+    local backpack = char:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool.Name == "Knife" then
+                return true
+            end
+        end
+    end
+    
+    return false
+end
+
+-- Auto Farm Function
+local function StartAutoFarm()
+    coroutine.wrap(function()
+        while AutoFarmEnabled do
+            if CollectedCoins >= TargetCoins then
+                StatusLabel:SetText("📊 Status: Target Reached!")
+                HexWindow:Notify("Farm", "Target of " .. TargetCoins .. " coins reached!", 3)
+                break
+            end
+            
+            -- Find and collect coins
+            local coinsFound = 0
+            for _, obj in pairs(Workspace:GetDescendants()) do
+                if not AutoFarmEnabled then break end
+                
+                if obj:IsA("BasePart") then
+                    local isCoin = (getgenv().CollectNormal and obj.Name == "Coin") or 
+                                  (getgenv().CollectGold and obj.Name == "GoldCoin")
+                    
+                    if isCoin then
+                        local char = Player.Character
+                        if char and char:FindFirstChild("HumanoidRootPart") then
+                            local distance = (char.HumanoidRootPart.Position - obj.Position).Magnitude
+                            
+                            if distance <= FarmRange then
+                                -- Collect coin
+                                firetouchinterest(char.HumanoidRootPart, obj, 0)
+                                firetouchinterest(char.HumanoidRootPart, obj, 1)
+                                
+                                coinsFound = coinsFound + 1
+                                CollectedCoins = CollectedCoins + 1
+                                
+                                -- Update UI
+                                CoinsLabel:SetText("💰 Coins Collected: " .. CollectedCoins)
+                                StatusLabel:SetText("📊 Status: Collecting... (" .. CollectedCoins .. "/" .. TargetCoins .. ")")
+                                
+                                task.wait(FarmSpeed)
+                            end
+                        end
+                    end
+                end
+            end
+            
+            if coinsFound == 0 then
+                StatusLabel:SetText("📊 Status: Searching for coins...")
+            end
+            
+            task.wait(1)
+        end
+    end)()
+end
+
+-- ============================
+-- 🔪 AUTO MURDER FUNCTIONS
+-- ============================
+
+-- Get all innocent players
+local function GetInnocentPlayers()
+    local players = {}
+    for _, player in pairs(game.Players:GetPlayers()) do
+        if player ~= Player and player.Character then
+            local char = player.Character
+            if char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+                if not IsMurdererForPlayer(player) then
+                    table.insert(players, player)
+                end
+            end
+        end
+    end
+    return players
+end
+
+-- Check if player is murderer
+local function IsMurdererForPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    
+    local char = targetPlayer.Character
+    for _, child in pairs(char:GetChildren()) do
+        if child.Name == "Knife" then
+            return true
+        end
+    end
+    return false
+end
+
+-- Kill player function
+local function KillPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return false end
+    
+    local char = Player.Character
+    local targetChar = targetPlayer.Character
+    
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
+    if not targetChar:FindFirstChild("HumanoidRootPart") then return false end
+    
+    -- Check distance
+    local distance = (char.HumanoidRootPart.Position - targetChar.HumanoidRootPart.Position).Magnitude
+    
+    -- Teleport if enabled
+    if getgenv().TeleportToTarget and distance > 5 then
+        char.HumanoidRootPart.CFrame = targetChar.HumanoidRootPart.CFrame * CFrame.new(0, 0, -2)
+        task.wait(0.2)
+    end
+    
+    -- Try to kill
+    local success = false
+    
+    -- Try remote events
+    local remotes = {"KnifeRemote", "DamagePlayer", "HitPlayer", "Damage", "Hit"}
+    for _, remoteName in pairs(remotes) do
+        local remote = game:GetService("ReplicatedStorage"):FindFirstChild(remoteName)
+        if remote then
+            pcall(function()
+                remote:FireServer(targetChar.HumanoidRootPart)
+                success = true
+            end)
+        end
+    end
+    
+    -- Try knife activation
+    if char:FindFirstChild("Knife") then
+        pcall(function()
+            char.Knife:Activate()
+            success = true
+        end)
+    end
+    
+    -- Try touch
+    if not success then
+        pcall(function()
+            firetouchinterest(char.HumanoidRootPart, targetChar.HumanoidRootPart, 0)
+            firetouchinterest(char.HumanoidRootPart, targetChar.HumanoidRootPart, 1)
+            success = true
+        end)
+    end
+    
+    return success
+end
+
+-- Auto Murder Function
+local function StartAutoMurder()
+    coroutine.wrap(function()
+        local lastAttackTime = 0
+        
+        while AutoMurderEnabled do
+            -- Check if we're murderer
+            if IsMurderer() then
+                ModeLabel:SetText("🎯 Mode: Murderer")
+                StatusLabel:SetText("📊 Status: Hunting...")
+                
+                -- Get innocent players
+                local innocentPlayers = GetInnocentPlayers()
+                PlayersLabel:SetText("👥 Players Left: " .. #innocentPlayers)
+                
+                if #innocentPlayers > 0 then
+                    -- Try to kill each player
+                    for _, player in pairs(innocentPlayers) do
+                        if not AutoMurderEnabled then break end
+                        
+                        local currentTime = tick()
+                        if currentTime - lastAttackTime >= MurderCooldown then
+                            local success = KillPlayer(player)
+                            
+                            if success then
+                                TotalKills = TotalKills + 1
+                                KillList[player.Name] = true
+                                FailedKills[player.Name] = nil
+                                
+                                KillsLabel:SetText("🔪 Players Killed: " .. TotalKills)
+                                StatusLabel:SetText("📊 Status: Killed " .. player.Name)
+                                
+                                HexWindow:Notify("Kill", "Killed " .. player.Name .. "!", 2)
+                            else
+                                FailedKills[player.Name] = (FailedKills[player.Name] or 0) + 1
+                                FailedLabel:SetText("❌ Failed Attempts: " .. table.size(FailedKills))
+                                
+                                if getgenv().RetryFailed and FailedKills[player.Name] < 3 then
+                                    StatusLabel:SetText("📊 Status: Failed, retrying...")
+                                end
+                            end
+                            
+                            lastAttackTime = currentTime
+                            task.wait(0.1)
+                        end
+                    end
+                else
+                    StatusLabel:SetText("📊 Status: All players killed!")
+                    HexWindow:Notify("Victory", "All innocent players eliminated!", 5)
+                    
+                    -- Reset for next round
+                    task.wait(5)
+                    KillList = {}
+                    FailedKills = {}
+                end
+            else
+                ModeLabel:SetText("🎯 Mode: Innocent")
+                StatusLabel:SetText("📊 Status: Waiting to become murderer...")
+            end
+            
+            task.wait(1)
+        end
+    end)()
+end
+
+-- ============================
+-- 🚀 SYSTEM FUNCTIONS
+-- ============================
+
+-- Start Hex System
+local function StartHexSystem()
+    -- Start both systems
+    if AutoFarmEnabled then
+        StartAutoFarm()
+    end
+    
+    if AutoMurderEnabled then
+        StartAutoMurder()
+    end
+    
+    -- Start runtime timer
+    local startTime = tick()
+    RunService.Heartbeat:Connect(function()
+        if AutoFarmEnabled or AutoMurderEnabled then
+            local runtime = math.floor(tick() - startTime)
+            local minutes = math.floor(runtime / 60)
+            local seconds = runtime % 60
+            TimeLabel:SetText("⏰ Runtime: " .. minutes .. "m " .. seconds .. "s")
+        end
+    end)
+end
+
+-- Stop Hex System
+local function StopHexSystem()
+    AutoFarmEnabled = false
+    AutoMurderEnabled = false
+    StatusLabel:SetText("📊 Status: Stopped")
+    ModeLabel:SetText("🎯 Mode: Idle")
+end
+
+-- ============================
+-- 🎮 INITIALIZATION
+-- ============================
+
+-- Default settings
+getgenv().CollectGold = true
+getgenv().CollectNormal = true
+getgenv().TeleportToTarget = false
+getgenv().RetryFailed = true
+
+-- Welcome notification
+task.wait(1)
+HexWindow:Notify("🔮 HEX MM2", "Advanced Farm + Murder System Loaded!", 5)
+
+print("========================================")
+print("🔮 HEX MM2 SCRIPT LOADED")
+print("🌾 Features: Auto Farm + Auto Murder")
+print("🎮 GUI: Hex Interface")
+print("========================================")
+
+-- Auto-update player count
+RunService.Heartbeat:Connect(function()
+    if AutoMurderEnabled then
+        local innocentPlayers = GetInnocentPlayers()
+        PlayersLabel:SetText("👥 Players Left: " .. #innocentPlayers)
+    end
+end)
